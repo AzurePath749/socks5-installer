@@ -43,16 +43,17 @@ fi
 read -p "🚪 Socks5 端口 [1080]: " port
 port=${port:-1080}
 
-read -p "👤 用户名 [user]: " username
+read -p "👤 请输入用户名 [user]: " username
 username=${username:-user}
 
-read -p "🔑 密码 [pass123]: " password
+read -p "🔑 请输入密码 [pass123]: " password
 password=${password:-pass123}
 
 # 创建用户
 if ! id "$username" &>/dev/null; then
   useradd -M -s /usr/sbin/nologin "$username"
 fi
+
 echo "$username:$password" | chpasswd
 
 # 获取默认网卡
