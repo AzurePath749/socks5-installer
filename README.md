@@ -28,10 +28,3 @@
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/AzurePath749/socks5-installer/main/install_socks5.sh | bash
-
-
-## 或使用 wget：
-wget -O - https://raw.githubusercontent.com/AzurePath749/socks5-installer/main/install_socks5.sh | bash
-
-♻️ 一键反安装
-curl -fsSL https://raw.githubusercontent.com/AzurePath749/socks5-installer/main/uninstall.sh | bash
