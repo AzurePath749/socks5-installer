@@ -27,4 +27,4 @@
 ### 方式 A：使用 Curl (推荐)
 适用于大多数现代 Linux 发行版：
 ```bash
-bash <(curl -sL [https://raw.githubusercontent.com/AzurePath749/socks5-installer/main/install_s5.sh])
+bash <(curl -sL (https://raw.githubusercontent.com/AzurePath749/socks5-installer/main/install_s5.sh))
