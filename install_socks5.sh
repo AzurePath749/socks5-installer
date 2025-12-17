@@ -15,7 +15,7 @@ plain="\033[0m"
 echo -e "${blue}🌍 Socks5 (Dante) 一键安装脚本${plain}"
 echo -e "${yellow}-------------------------------------${plain}"
 
-# ---------- root 权限 ----------
+# ---------- root ----------
 if [ "$EUID" -ne 0 ]; then
   echo -e "${red}❌ 请使用 root 用户运行${plain}"
   exit 1
@@ -38,20 +38,27 @@ else
   echo -e "${green}✅ 已安装 dante-server${plain}"
 fi
 
-# ---------- 从终端读取输入（关键修复） ----------
-echo
-read -p "👤 请输入用户名 [user]: " username < /dev/tty
-username=${username:-user}
+# ---------- 默认参数（关键） ----------
+username="user"
+password="pass123"
+port="1080"
 
-read -p "🔑 请输入密码 [pass123]: " password < /dev/tty
-password=${password:-pass123}
+# ---------- 仅在有 TTY 时才交互 ----------
+if [ -t 0 ]; then
+  echo
+  read -p "👤 用户名 [user]: " input
+  [ -n "$input" ] && username="$input"
 
-read -p "🚪 请输入 Socks5 端口 [1080]: " port < /dev/tty
-port=${port:-1080}
+  read -p "🔑 密码 [pass123]: " input
+  [ -n "$input" ] && password="$input"
+
+  read -p "🚪 端口 [1080]: " input
+  [ -n "$input" ] && port="$input"
+fi
 
 # ---------- 校验 ----------
 if [[ ! "$username" =~ ^[a-zA-Z0-9_]+$ ]]; then
-  echo -e "${red}❌ 用户名只能包含字母、数字、下划线${plain}"
+  echo -e "${red}❌ 用户名不合法${plain}"
   exit 1
 fi
 
@@ -64,18 +71,13 @@ fi
 if ! id "$username" >/dev/null 2>&1; then
   useradd -M -s /usr/sbin/nologin "$username"
 fi
-
 echo "$username:$password" | chpasswd
 
 # ---------- 获取默认网卡 ----------
 iface=$(ip route | awk '/default/ {print $5; exit}')
+[ -z "$iface" ] && { echo -e "${red}❌ 无法获取网卡${plain}"; exit 1; }
 
-if [ -z "$iface" ]; then
-  echo -e "${red}❌ 无法获取默认网络接口${plain}"
-  exit 1
-fi
-
-# ---------- 配置 danted ----------
+# ---------- 写配置 ----------
 cat > /etc/danted.conf <<EOF
 logoutput: /var/log/danted.log
 internal: 0.0.0.0 port = $port
@@ -94,16 +96,14 @@ socks pass {
 }
 EOF
 
-# ---------- 启动服务 ----------
 systemctl enable danted
 systemctl restart danted
 
-# ---------- 输出 ----------
 echo
-echo -e "${green}🎉 Socks5 安装完成！${plain}"
+echo -e "${green}🎉 Socks5 安装完成${plain}"
 echo -e "${yellow}-------------------------------------${plain}"
-echo -e "🌐 服务器 IP : ${blue}$(hostname -I | awk '{print $1}')${plain}"
-echo -e "🚪 端口       : ${blue}$port${plain}"
-echo -e "👤 用户名     : ${blue}$username${plain}"
-echo -e "🔑 密码       : ${blue}$password${plain}"
+echo -e "🌐 IP      : ${blue}$(hostname -I | awk '{print $1}')${plain}"
+echo -e "🚪 端口    : ${blue}$port${plain}"
+echo -e "👤 用户名  : ${blue}$username${plain}"
+echo -e "🔑 密码    : ${blue}$password${plain}"
 echo -e "${yellow}-------------------------------------${plain}"
