@@ -4,10 +4,8 @@ set -e
 # ==============================================
 # 🧦 Socks5 (Dante) 一键安装脚本
 # Repo: https://github.com/AzurePath749/socks5-installer
-# Author: KenSao
 # ==============================================
 
-# ---------- 颜色 ----------
 green="\033[32m"
 red="\033[31m"
 yellow="\033[33m"
@@ -17,13 +15,13 @@ plain="\033[0m"
 echo -e "${blue}🌍 Socks5 (Dante) 一键安装脚本${plain}"
 echo -e "${yellow}-------------------------------------${plain}"
 
-# ---------- root 权限检查 ----------
+# ---------- root 权限 ----------
 if [ "$EUID" -ne 0 ]; then
-  echo -e "${red}❌ 请使用 root 用户运行该脚本${plain}"
+  echo -e "${red}❌ 请使用 root 用户运行${plain}"
   exit 1
 fi
 
-# ---------- 安装 dante-server ----------
+# ---------- 安装 dante ----------
 if ! command -v danted >/dev/null 2>&1; then
   echo -e "${yellow}📦 正在安装 dante-server...${plain}"
   if [ -f /etc/debian_version ]; then
@@ -40,18 +38,18 @@ else
   echo -e "${green}✅ 已安装 dante-server${plain}"
 fi
 
-# ---------- 用户输入（关键：先赋值，再使用） ----------
+# ---------- 从终端读取输入（关键修复） ----------
 echo
-read -p "👤 请输入用户名 [user]: " username
+read -p "👤 请输入用户名 [user]: " username < /dev/tty
 username=${username:-user}
 
-read -p "🔑 请输入密码 [pass123]: " password
+read -p "🔑 请输入密码 [pass123]: " password < /dev/tty
 password=${password:-pass123}
 
-read -p "🚪 请输入 Socks5 端口 [1080]: " port
+read -p "🚪 请输入 Socks5 端口 [1080]: " port < /dev/tty
 port=${port:-1080}
 
-# ---------- 基本校验 ----------
+# ---------- 校验 ----------
 if [[ ! "$username" =~ ^[a-zA-Z0-9_]+$ ]]; then
   echo -e "${red}❌ 用户名只能包含字母、数字、下划线${plain}"
   exit 1
@@ -77,7 +75,7 @@ if [ -z "$iface" ]; then
   exit 1
 fi
 
-# ---------- 写入 danted 配置 ----------
+# ---------- 配置 danted ----------
 cat > /etc/danted.conf <<EOF
 logoutput: /var/log/danted.log
 internal: 0.0.0.0 port = $port
@@ -100,7 +98,7 @@ EOF
 systemctl enable danted
 systemctl restart danted
 
-# ---------- 输出结果 ----------
+# ---------- 输出 ----------
 echo
 echo -e "${green}🎉 Socks5 安装完成！${plain}"
 echo -e "${yellow}-------------------------------------${plain}"
@@ -109,4 +107,3 @@ echo -e "🚪 端口       : ${blue}$port${plain}"
 echo -e "👤 用户名     : ${blue}$username${plain}"
 echo -e "🔑 密码       : ${blue}$password${plain}"
 echo -e "${yellow}-------------------------------------${plain}"
-echo -e "${green}✅ 现在可以使用以上信息连接 Socks5 代理${plain}"
