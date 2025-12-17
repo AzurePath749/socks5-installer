@@ -1,9 +1,9 @@
 #!/bin/bash
 
 # ==================================================
-# Project: Easy SOCKS5 Auto-Installer based on Gost
-# System:  Linux (Debian/Ubuntu/CentOS/Fedora)
-# Author:  Assistant
+# Project: Easy SOCKS5 Auto-Installer (Gost Version)
+# Repo:    https://github.com/AzurePath749/socks5-installer
+# Author:  Assistant & AzurePath749
 # ==================================================
 
 # --- 颜色配置 ---
@@ -27,16 +27,53 @@ log_warn() { echo -e "${YELLOW}[WARN]${PLAIN} $1"; }
 # 1. Root 权限检查
 check_root() {
     if [[ $EUID -ne 0 ]]; then
-        log_error "请使用 root 权限运行此脚本 (Please run as root)"
+        log_error "请使用 root 权限运行此脚本 (sudo -i)"
         exit 1
     fi
 }
 
-# 2. 系统及架构检测
+# 2. 检查是否已安装 (核心逻辑：提供卸载选项)
+check_installed() {
+    if [ -f "$SERVICE_FILE" ]; then
+        clear
+        echo -e "################################################"
+        echo -e "#   ${YELLOW}检测到 SOCKS5 服务已安装!${PLAIN}                  #"
+        echo -e "################################################"
+        echo -e "1. 覆盖安装 / 更新配置"
+        echo -e "2. 卸载服务 (彻底清除)"
+        echo -e "0. 退出脚本"
+        echo -e "################################################"
+        read -p "请选择 [0-2]: " choice
+        case $choice in
+            1)
+                log_info "准备覆盖安装，先停止旧服务..."
+                systemctl stop gost >/dev/null 2>&1
+                ;;
+            2)
+                uninstall_service
+                exit 0
+                ;;
+            *)
+                log_info "已退出"
+                exit 0
+                ;;
+        esac
+    fi
+}
+
+# 3. 卸载函数
+uninstall_service() {
+    log_info "正在卸载服务..."
+    systemctl stop gost >/dev/null 2>&1
+    systemctl disable gost >/dev/null 2>&1
+    rm -f $SERVICE_FILE
+    rm -f $GOST_PATH
+    systemctl daemon-reload
+    log_success "SOCKS5 服务及文件已卸载完成！"
+}
+
+# 4. 系统及架构检测
 check_system() {
-    log_info "正在检测系统环境..."
-    
-    # 检测架构
     ARCH=$(uname -m)
     case $ARCH in
         x86_64)  GOST_ARCH="linux-amd64";;
@@ -44,109 +81,111 @@ check_system() {
         armv7l)  GOST_ARCH="linux-armv7";;
         *)       log_error "不支持的 CPU 架构: $ARCH"; exit 1 ;;
     esac
-    log_success "检测到架构: $ARCH ($GOST_ARCH)"
 
-    # 检测包管理器
-    if command -v apt-get >/dev/null 2>&1; then
-        PM="apt-get"
-    elif command -v yum >/dev/null 2>&1; then
-        PM="yum"
-    elif command -v dnf >/dev/null 2>&1; then
-        PM="dnf"
-    elif command -v apk >/dev/null 2>&1; then
-        PM="apk" 
-    else
-        log_error "无法识别包管理器，请手动安装 wget 和 tar"
-        exit 1
-    fi
+    if command -v apt-get >/dev/null 2>&1; then PM="apt-get"
+    elif command -v yum >/dev/null 2>&1; then PM="yum"
+    elif command -v dnf >/dev/null 2>&1; then PM="dnf"
+    elif command -v apk >/dev/null 2>&1; then PM="apk"
+    else PM="unknown"; fi
 }
 
-# 3. 安装依赖
+# 5. 安装依赖
 install_dependencies() {
-    log_info "正在安装必要依赖..."
+    log_info "检查环境依赖 (如 curl/wget/tar)..."
+    [ "$PM" = "unknown" ] && { log_error "无法识别包管理器，请手动安装基础工具"; exit 1; }
+
     if [ "$PM" = "apk" ]; then
-        $PM add wget curl tar gzip >/dev/null 2>&1
+        # Alpine 不需要更新源，直接尝试安装
+        $PM add wget curl tar gzip libqrencode >/dev/null 2>&1
     else
+        # Debian/CentOS 尝试静默安装
         $PM install -y wget curl tar gzip >/dev/null 2>&1
     fi
-    log_success "依赖安装完成"
-}
-
-# 4. 获取公网 IP
-get_public_ip() {
-    log_info "正在获取公网 IP..."
-    PUBLIC_IP=$(curl -s4 --connect-timeout 5 ip.sb || curl -s4 --connect-timeout 5 ifconfig.me)
-    if [ -z "$PUBLIC_IP" ]; then
-        PUBLIC_IP="无法获取 (Unknown)"
-        log_warn "自动获取 IP 失败，请稍后手动确认"
-    else
-        log_success "当前公网 IP: $PUBLIC_IP"
+    # 二次检查，确保 curl 或 wget 至少有一个
+    if ! command -v curl >/dev/null 2>&1 && ! command -v wget >/dev/null 2>&1; then
+        log_warn "依赖安装可能不完整，尝试强制更新源..."
+        if [ "$PM" = "apt-get" ]; then apt-get update -y && apt-get install -y curl wget; fi
+        if [ "$PM" = "yum" ]; then yum update -y && yum install -y curl wget; fi
     fi
 }
 
-# 5. 用户交互配置
-configure_params() {
-    echo -e "------------------------------------------------"
-    echo -e "${YELLOW}请配置 SOCKS5 代理参数 (直接回车使用默认值)${PLAIN}"
-    echo -e "------------------------------------------------"
+# 6. 获取公网 IP
+get_public_ip() {
+    # 优先使用 curl，没有则用 wget
+    if command -v curl >/dev/null 2>&1; then
+        PUBLIC_IP=$(curl -s4 --connect-timeout 5 ip.sb || curl -s4 --connect-timeout 5 ifconfig.me)
+    elif command -v wget >/dev/null 2>&1; then
+        PUBLIC_IP=$(wget -qO- -T 5 ip.sb || wget -qO- -T 5 ifconfig.me)
+    fi
 
-    # 端口配置
+    [ -z "$PUBLIC_IP" ] && PUBLIC_IP="无法获取(请手动查看)"
+}
+
+# 7. 用户交互配置
+configure_params() {
+    clear
+    echo -e "################################################"
+    echo -e "#   SOCKS5 一键安装脚本 (Gost版)               #"
+    echo -e "#   Repo: AzurePath749/socks5-installer        #"
+    echo -e "################################################"
+    echo ""
+
+    # 端口
     read -p "请输入端口号 (默认随机 10000-65000): " INPUT_PORT
-    if [ -z "$INPUT_PORT" ]; then
+    if [[ -z "$INPUT_PORT" ]]; then
+        PORT=$(shuf -i 10000-65000 -n 1)
+    elif [[ ! $INPUT_PORT =~ ^[0-9]+$ ]] || [ $INPUT_PORT -lt 1 ] || [ $INPUT_PORT -gt 65535 ]; then
+        log_warn "输入无效，使用随机端口"
         PORT=$(shuf -i 10000-65000 -n 1)
     else
-        if [[ ! $INPUT_PORT =~ ^[0-9]+$ ]] || [ $INPUT_PORT -lt 1 ] || [ $INPUT_PORT -gt 65535 ]; then
-            log_error "端口无效，使用随机端口"
-            PORT=$(shuf -i 10000-65000 -n 1)
-        else
-            PORT=$INPUT_PORT
-        fi
+        PORT=$INPUT_PORT
     fi
 
-    # 用户名配置
+    # 用户名
     read -p "请输入用户名 (默认: admin): " INPUT_USER
     USER=${INPUT_USER:-"admin"}
 
-    # 密码配置
-    read -p "请输入密码 (默认随机生成): " INPUT_PASS
+    # 密码
+    read -p "请输入密码 (默认随机强密码): " INPUT_PASS
     if [ -z "$INPUT_PASS" ]; then
         PASS=$(date +%s%N | md5sum | head -c 12)
     else
         PASS=$INPUT_PASS
     fi
-
-    echo -e "------------------------------------------------"
-    log_info "配置已确认: Port=$PORT, User=$USER"
 }
 
-# 6. 下载并安装 Gost
+# 8. 下载并安装 Gost
 install_gost() {
-    # 停止旧服务
-    systemctl stop gost >/dev/null 2>&1
+    log_info "下载核心组件 (Arch: $GOST_ARCH)..."
+    # 如果是覆盖安装，先删除旧文件
+    rm -f $GOST_PATH
 
-    log_info "正在下载 Gost v${GOST_VER}..."
     URL="https://github.com/ginuerzh/gost/releases/download/v${GOST_VER}/gost-${GOST_ARCH}-${GOST_VER}.gz"
-    
-    wget --no-check-certificate -O /tmp/gost.gz "$URL"
-    if [ $? -ne 0 ]; then
-        log_error "下载失败，请检查网络连接或 GitHub 访问情况"
+
+    # 优先用 wget 下载，因为它在精简系统更常见
+    if command -v wget >/dev/null 2>&1; then
+        wget --no-check-certificate -qO /tmp/gost.gz "$URL"
+    else
+        curl -sL -k -o /tmp/gost.gz "$URL"
+    fi
+
+    if [ ! -f "/tmp/gost.gz" ]; then
+        log_error "下载失败，请检查服务器网络 (需访问 GitHub)"
         exit 1
     fi
 
-    log_info "正在安装..."
     gzip -d /tmp/gost.gz
     mv /tmp/gost $GOST_PATH
     chmod +x $GOST_PATH
     rm -f /tmp/gost.gz
-    log_success "Gost 安装成功"
 }
 
-# 7. 配置 Systemd 服务
+# 9. 配置 Systemd
 setup_service() {
-    log_info "配置开机自启..."
+    log_info "配置系统服务..."
     cat > $SERVICE_FILE <<EOF
 [Unit]
-Description=Gost SOCKS5 Proxy Service
+Description=Gost SOCKS5 Proxy
 After=network.target
 
 [Service]
@@ -154,7 +193,7 @@ Type=simple
 User=root
 ExecStart=$GOST_PATH -L $USER:$PASS@:$PORT
 Restart=always
-RestartSec=5
+RestartSec=3
 
 [Install]
 WantedBy=multi-user.target
@@ -162,60 +201,66 @@ EOF
 
     systemctl daemon-reload
     systemctl enable gost >/dev/null 2>&1
-    systemctl start gost
-    
-    # 检查状态
+    systemctl restart gost
+
+    # 等待2秒让服务启动
+    sleep 2
+
     if systemctl is-active --quiet gost; then
-        log_success "服务启动成功"
+        log_success "服务已启动!"
     else
-        log_error "服务启动失败，请检查日志 (journalctl -u gost)"
+        log_error "服务启动失败，请运行 journalctl -u gost -n 20 查看日志"
         exit 1
     fi
 }
 
-# 8. 防火墙配置 (尽力而为)
+# 10. 防火墙
 setup_firewall() {
-    log_info "尝试配置防火墙放行端口 $PORT..."
+    log_info "尝试配置系统防火墙..."
     if command -v ufw >/dev/null 2>&1; then
-        ufw allow $PORT/tcp >/dev/null 2>&1
-        ufw allow $PORT/udp >/dev/null 2>&1
-        log_success "UFW 防火墙规则已添加"
+        if ufw status | grep -q "Status: active"; then
+             ufw allow $PORT/tcp >/dev/null 2>&1
+             ufw allow $PORT/udp >/dev/null 2>&1
+             log_success "已添加 UFW 规则"
+        fi
     elif command -v firewall-cmd >/dev/null 2>&1; then
-        firewall-cmd --zone=public --add-port=$PORT/tcp --permanent >/dev/null 2>&1
-        firewall-cmd --zone=public --add-port=$PORT/udp --permanent >/dev/null 2>&1
-        firewall-cmd --reload >/dev/null 2>&1
-        log_success "Firewalld 防火墙规则已添加"
+        if firewall-cmd --state | grep -q "running"; then
+            firewall-cmd --zone=public --add-port=$PORT/tcp --permanent >/dev/null 2>&1
+            firewall-cmd --zone=public --add-port=$PORT/udp --permanent >/dev/null 2>&1
+            firewall-cmd --reload >/dev/null 2>&1
+            log_success "已添加 Firewalld 规则"
+        fi
     else
-        log_warn "未检测到 UFW 或 Firewalld，请手动检查防火墙设置"
+        log_warn "未检测到常用防火墙，请手动检查"
     fi
 }
 
-# 9. 显示结果
+# 11. 展示结果
 show_result() {
     clear
     echo -e "=================================================="
-    echo -e "${GREEN}          SOCKS5 代理安装完成!            ${PLAIN}"
+    echo -e "${GREEN}SUCCESS! 安装完成${PLAIN}"
     echo -e "=================================================="
-    echo -e " IP 地址    : ${GREEN}${PUBLIC_IP}${PLAIN}"
-    echo -e " 端口 (Port): ${GREEN}${PORT}${PLAIN}"
-    echo -e " 用户 (User): ${GREEN}${USER}${PLAIN}"
-    echo -e " 密码 (Pass): ${GREEN}${PASS}${PLAIN}"
+    echo -e " IP Address : ${GREEN}${PUBLIC_IP}${PLAIN}"
+    echo -e " Port       : ${GREEN}${PORT}${PLAIN}"
+    echo -e " Username   : ${GREEN}${USER}${PLAIN}"
+    echo -e " Password   : ${GREEN}${PASS}${PLAIN}"
     echo -e "=================================================="
-    echo -e " 连接字符串 (可以直接复制使用):"
-    echo -e "${YELLOW}socks5://${USER}:${PASS}@${PUBLIC_IP}:${PORT}${PLAIN}"
+    echo -e " SOCKS5 链接 (复制使用):"
+    echo -e " ${YELLOW}socks5://${USER}:${PASS}@${PUBLIC_IP}:${PORT}${PLAIN}"
     echo -e "=================================================="
-    echo -e "${RED}[重要提示]${PLAIN} 如果无法连接，请务必检查："
-    echo -e " 1. 云服务商控制台(阿里云/腾讯云/AWS)的【安全组】是否放行了端口 ${PORT}。"
-    echo -e " 2. 本地电脑的网络环境是否允许连接该服务器 IP。"
+    echo -e "${RED}重要提示:${PLAIN} 如果无法连接，请务必检查："
+    echo -e " 1. 云服务器后台(阿里云/AWS等)的【安全组】是否放行了端口 ${PORT}。"
+    echo -e " 2. 您的本地网络是否允许连接该服务器 IP。"
     echo -e "=================================================="
 }
 
-# --- 主逻辑执行 ---
+# --- 主逻辑 ---
 main() {
-    clear
-    echo -e "${BLUE}>>> 开始安装 Easy SOCKS5 (Gost版)...${PLAIN}"
     check_root
     check_system
+    # 关键点：在安装前先检查是否已安装
+    check_installed
     install_dependencies
     get_public_ip
     configure_params
