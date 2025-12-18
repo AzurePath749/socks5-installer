@@ -28,3 +28,8 @@
 适用于大多数现代 Linux 发行版 (Ubuntu/CentOS/Fedora)：
 ```bash
 bash <(curl -sL https://raw.githubusercontent.com/AzurePath749/socks5-installer/main/install_s5.sh)
+```
+### 方式 B：使用 wget
+```bash
+bash <(wget -qO- https://raw.githubusercontent.com/AzurePath749/socks5-installer/main/install_s5.sh)
+```
