@@ -33,3 +33,28 @@ bash <(curl -sL https://raw.githubusercontent.com/AzurePath749/socks5-installer/
 ```bash
 bash <(wget -qO- https://raw.githubusercontent.com/AzurePath749/socks5-installer/main/install_s5.sh)
 ```
+
+##  🛠 管理与维护
+1. 再次运行脚本
+脚本具有幂等性。再次运行上述安装命令，将自动检测当前状态，并弹出管理菜单：
+
+[1] 覆盖安装 / 修改配置
+
+[2] 卸载服务
+
+2. 常用服务命令
+部署完成后，您可以使用标准的 Systemd 命令管理服务：
+
+```bash
+systemctl start gost    # 启动服务
+systemctl stop gost     # 停止服务
+systemctl restart gost  # 重启服务
+systemctl status gost   # 查看运行状态
+```
+
+3. 紧急/手动卸载
+如果您删除了脚本，或者只想通过一条命令快速清理环境，可执行：
+```bash
+systemctl stop gost && systemctl disable gost && rm -f /etc/systemd/system/gost.service && rm -f /usr/local/bin/gost && systemctl daemon-reload && echo "卸载完成"
+```
+
