@@ -113,3 +113,4 @@ systemctl stop sockd && systemctl disable sockd && yum remove -y dante-server &&
 - 安装后如果无法连接，请检查云服务器后台的**安全组**是否放行了对应端口
 - 脚本具有幂等性，再次运行可覆盖安装或卸载
 - Gost 版运行在低权限 `gost` 用户下，Dante 版代理用户已禁止 SSH 登录
+- 如果本地网络存在 DNS 污染/劫持，建议使用 `socks5h://` 协议（由代理服务器做 DNS 解析），而非 `socks5://`
