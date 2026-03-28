@@ -106,6 +106,9 @@ uninstall_service() {
     systemctl disable gost >/dev/null 2>&1 || true
     rm -f "${SERVICE_FILE}"
     rm -f "${GOST_PATH}"
+    if id -u gost &>/dev/null 2>&1; then
+        userdel gost 2>/dev/null || true
+    fi
     systemctl daemon-reload
     log_success "SOCKS5 服务及文件已卸载完成！"
 }
@@ -133,7 +136,7 @@ install_dependencies() {
     [[ "${PM}" == "unknown" ]] && { log_error "无法识别包管理器，请手动安装基础工具"; exit 1; }
 
     if [[ "${PM}" == "apk" ]]; then
-        "${PM}" add wget curl tar gzip libqrencode >/dev/null 2>&1 || true
+        "${PM}" add wget curl tar gzip >/dev/null 2>&1 || true
     else
         # 使用 DEBIAN_FRONTEND 避免 debconf 交互问题
         export DEBIAN_FRONTEND=noninteractive
@@ -183,7 +186,7 @@ configure_params() {
             exit 1
         fi
         # 检查端口占用
-        if ss -tlnp 2>/dev/null | grep -q ":${PORT} " || netstat -tlnp 2>/dev/null | grep -q ":${PORT} "; then
+        if ss -tlnp 2>/dev/null | grep -qE ":${PORT}\b" || netstat -tlnp 2>/dev/null | grep -qE ":${PORT}\b"; then
             log_error "端口 ${PORT} 已被占用"
             exit 1
         fi
@@ -213,7 +216,7 @@ configure_params() {
     fi
 
     # 端口占用检测
-    if ss -tlnp 2>/dev/null | grep -q ":${PORT} " || netstat -tlnp 2>/dev/null | grep -q ":${PORT} "; then
+    if ss -tlnp 2>/dev/null | grep -qE ":${PORT}\b" || netstat -tlnp 2>/dev/null | grep -qE ":${PORT}\b"; then
         log_error "端口 ${PORT} 已被占用，请选择其他端口"
         exit 1
     fi

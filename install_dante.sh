@@ -95,9 +95,13 @@ uninstall_dante() {
 
     rm -f "${CONF_FILE}"
 
-    # 尝试删除可能创建的代理用户 (如果不清理，下次安装会报错)
-    if id "proxy_user" &>/dev/null; then
-        userdel -r proxy_user >/dev/null 2>&1 || true
+    if [[ -f /etc/dante_user ]] || [[ -f /etc/sockd_user ]]; then
+        local old_user=""
+        old_user=$(cat /etc/dante_user 2>/dev/null || cat /etc/sockd_user 2>/dev/null || true)
+        if [[ -n "${old_user}" ]] && id "${old_user}" &>/dev/null; then
+            userdel -r "${old_user}" >/dev/null 2>&1 || true
+            rm -f /etc/dante_user /etc/sockd_user
+        fi
     fi
 
     log_success "Dante 已卸载完成"
@@ -107,6 +111,7 @@ uninstall_dante() {
 install_dependencies() {
     log_info "安装 Dante-server..."
     if [[ "${OS}" = "debian" ]]; then
+        export DEBIAN_FRONTEND=noninteractive
         apt-get update -y
         apt-get install -y dante-server
     else
@@ -154,6 +159,15 @@ configure_params() {
 
     read -rp "请输入端口 (默认 10800): " INPUT_PORT
     PORT="${INPUT_PORT:-10800}"
+    if ! [[ "${PORT}" =~ ^[0-9]+$ ]] || [[ "${PORT}" -lt 1 ]] || [[ "${PORT}" -gt 65535 ]]; then
+        log_error "端口必须是 1-65535 之间的数字"
+        exit 1
+    fi
+    if ss -tlnp 2>/dev/null | grep -qE ":${PORT}\b" || netstat -tlnp 2>/dev/null | grep -qE ":${PORT}\b"; then
+        log_error "端口 ${PORT} 已被占用"
+        exit 1
+    fi
+    true
 
     # 用户名（带输入清洗）
     read -rp "请输入用户名 (默认: admin): " INPUT_USER
@@ -192,12 +206,18 @@ setup_user() {
 
     # 设置密码
     echo "${USER}:${PASS}" | chpasswd
+    echo "${USER}" > "${CONF_FILE%/*}/dante_user" 2>/dev/null || true
     log_success "用户 ${USER} 已创建 (禁止 SSH 登录)"
 }
 
 # 10. 生成配置文件
 write_config() {
     log_info "生成配置文件 (${CONF_FILE})..."
+
+    if [[ -z "${INTERFACE}" ]]; then
+        log_error "无法检测出口网卡，配置生成失败"
+        return 1
+    fi
 
     # 备份旧配置
     [[ -f "${CONF_FILE}" ]] && mv "${CONF_FILE}" "${CONF_FILE}.bak"
