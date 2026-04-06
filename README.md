@@ -36,11 +36,13 @@
 
 ### 快速安装
 
+方式 A：使用 Curl
 ```bash
-# 方式 A：使用 Curl
 bash <(curl -sL https://raw.githubusercontent.com/AzurePath749/socks5-installer/main/install_s5.sh)
+```
 
-# 方式 B：使用 wget
+方式 B：使用 wget
+```bash
 bash <(wget -qO- https://raw.githubusercontent.com/AzurePath749/socks5-installer/main/install_s5.sh)
 ```
 
@@ -74,11 +76,13 @@ systemctl stop gost && systemctl disable gost && rm -f /etc/systemd/system/gost.
 
 ### 快速安装
 
+方式 A：使用 Curl
 ```bash
-# 方式 A：使用 Curl
 bash <(curl -sL https://raw.githubusercontent.com/AzurePath749/socks5-installer/main/install_dante.sh)
+```
 
-# 方式 B：使用 wget
+方式 B：使用 wget
+```bash
 bash <(wget -qO- https://raw.githubusercontent.com/AzurePath749/socks5-installer/main/install_dante.sh)
 ```
 

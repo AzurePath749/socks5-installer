@@ -67,7 +67,9 @@ check_system() {
 
 # 4. 检查是否已安装
 check_installed() {
-    if systemctl is-active --quiet "${SERVICE_NAME}" || [[ -f "${CONF_FILE}" ]]; then
+    local is_active=false
+    systemctl is-active --quiet "${SERVICE_NAME}" 2>/dev/null && is_active=true
+    if [[ "${is_active}" == "true" ]] || [[ -f "${CONF_FILE}" ]]; then
         echo -e "${YELLOW}检测到 Dante 服务已安装!${PLAIN}"
         echo -e "1. 重新安装/重置密码"
         echo -e "2. 卸载服务"
@@ -117,13 +119,17 @@ install_dependencies() {
     else
         # CentOS/RHEL 需要 EPEL 源
         if [[ "${PM}" = "dnf" ]]; then
-            dnf install -y dante-server || {
-                dnf install -y epel-release
-                dnf install -y dante-server
+            dnf install -y epel-release 2>/dev/null || true
+            dnf install -y dante-server 2>/dev/null || dnf install -y dante 2>/dev/null || {
+                log_error "Dante 安装失败，请检查软件源"
+                exit 1
             }
         else
-            yum install -y epel-release
-            yum install -y dante-server
+            yum install -y epel-release 2>/dev/null || true
+            yum install -y dante-server 2>/dev/null || yum install -y dante 2>/dev/null || {
+                log_error "Dante 安装失败，请检查软件源"
+                exit 1
+            }
         fi
     fi
 
