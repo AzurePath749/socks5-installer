@@ -154,6 +154,8 @@ get_public_ip() {
     done
 
     [[ -z "${PUBLIC_IP}" ]] && PUBLIC_IP="无法获取(请手动查看)"
+    # 确保函数返回 0，防止 set -e 误杀
+    true
 }
 
 # 8. 配置交互
