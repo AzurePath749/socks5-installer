@@ -4,7 +4,7 @@
 ![License](https://img.shields.io/github/license/AzurePath749/socks5-installer?style=flat-square)
 ![Shell](https://img.shields.io/badge/language-Shell-orange?style=flat-square)
 
-> 极致轻量、兼容性极强的 SOCKS5 代理一键安装脚本，提供两种内核可选。
+> 极致轻量、兼容性极强的 SOCKS5 代理一键安装脚本，提供 **Gost** 和 **Dante** 两种内核可选。
 
 ---
 
